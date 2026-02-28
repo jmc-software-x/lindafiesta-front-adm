@@ -1,0 +1,29 @@
+export const navSections = [
+  {
+    title: 'General',
+    items: [{ label: 'Dashboard', href: '/dashboard' }],
+  },
+  {
+    title: 'Ventas',
+    items: [
+      { label: 'Leads', href: '/dashboard/sales/leads' },
+      { label: 'Cotizaciones', href: '/dashboard/sales/quotes' },
+    ],
+  },
+  {
+    title: 'Operaciones',
+    items: [
+      { label: 'Eventos', href: '/dashboard/operations/events' },
+      { label: 'Calendario', href: '/dashboard/operations/calendar' },
+      { label: 'Proveedores', href: '/dashboard/providers' },
+    ],
+  },
+  {
+    title: 'Configuracion',
+    items: [
+      { label: 'Usuarios', href: '/dashboard/settings/users' },
+      { label: 'Roles', href: '/dashboard/settings/roles' },
+      { label: 'Auditoria', href: '/dashboard/settings/audit' },
+    ],
+  },
+] as const;
