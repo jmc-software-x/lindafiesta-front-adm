@@ -1,9 +1,9 @@
-import { scryptSync, timingSafeEqual } from 'crypto';
 import type { NextRequest } from 'next/server';
 
 const AUTH_WINDOW_MS = 15 * 60 * 1000;
 const AUTH_MAX_ATTEMPTS = 5;
 const AUTH_LOCK_MS = 15 * 60 * 1000;
+const DEFAULT_MIN_PASSWORD_LENGTH = process.env.NODE_ENV === 'production' ? 12 : 8;
 
 interface LoginAttempt {
   count: number;
@@ -12,19 +12,6 @@ interface LoginAttempt {
 }
 
 const attemptsByKey = new Map<string, LoginAttempt>();
-
-const encoder = new TextEncoder();
-
-const safeEquals = (left: string, right: string): boolean => {
-  const leftBytes = encoder.encode(left);
-  const rightBytes = encoder.encode(right);
-
-  if (leftBytes.length !== rightBytes.length) {
-    return false;
-  }
-
-  return timingSafeEqual(leftBytes, rightBytes);
-};
 
 const clearExpiredAttempts = (nowMs: number) => {
   attemptsByKey.forEach((value, key) => {
@@ -40,7 +27,7 @@ const clearExpiredAttempts = (nowMs: number) => {
 const getClientKey = (request: NextRequest): string => {
   const forwardedFor = request.headers.get('x-forwarded-for');
   const forwardedIp = forwardedFor?.split(',')[0]?.trim();
-  return forwardedIp || request.ip || 'unknown';
+  return forwardedIp || 'unknown';
 };
 
 export const isOriginAllowed = (request: NextRequest): boolean => {
@@ -109,6 +96,10 @@ export const clearFailedLoginAttempts = (request: NextRequest): void => {
 export const validateLoginInput = (email: string, password: string): boolean => {
   const normalizedEmail = email.trim().toLowerCase();
   const normalizedPassword = password.trim();
+  const configuredMinPasswordLength = Number(process.env.ADMIN_AUTH_MIN_PASSWORD_LENGTH);
+  const minPasswordLength = Number.isFinite(configuredMinPasswordLength)
+    ? Math.max(8, Math.min(configuredMinPasswordLength, 128))
+    : DEFAULT_MIN_PASSWORD_LENGTH;
 
   if (!normalizedEmail || !normalizedPassword) {
     return false;
@@ -122,28 +113,84 @@ export const validateLoginInput = (email: string, password: string): boolean => 
     return false;
   }
 
-  if (normalizedPassword.length < 10) {
+  if (normalizedPassword.length < minPasswordLength) {
     return false;
   }
 
   return true;
 };
 
-export const isConfiguredCredential = (email: string, password: string): boolean => {
-  const configuredEmail = process.env.ADMIN_AUTH_EMAIL;
-  const configuredPasswordSalt = process.env.ADMIN_AUTH_PASSWORD_SALT;
-  const configuredPasswordHash = process.env.ADMIN_AUTH_PASSWORD_HASH;
+export const normalizeTenantId = (tenantId?: string): string => {
+  return tenantId?.trim() || '';
+};
 
-  if (!configuredEmail || !configuredPasswordSalt || !configuredPasswordHash) {
-    throw new Error(
-      'Missing ADMIN_AUTH_EMAIL, ADMIN_AUTH_PASSWORD_SALT or ADMIN_AUTH_PASSWORD_HASH env vars.'
-    );
+export const isTenantIdValid = (tenantId: string): boolean => {
+  if (!tenantId) {
+    return false;
   }
 
-  const providedHash = scryptSync(password, configuredPasswordSalt, 64).toString('hex');
+  if (tenantId.length < 2 || tenantId.length > 120) {
+    return false;
+  }
 
-  return (
-    safeEquals(email.trim().toLowerCase(), configuredEmail.trim().toLowerCase()) &&
-    safeEquals(providedHash, configuredPasswordHash)
-  );
+  return /^[a-zA-Z0-9._-]+$/.test(tenantId);
+};
+
+export const getBackendApiBaseUrl = (): string => {
+  const configured = process.env.BACKEND_API_BASE_URL?.trim();
+  if (configured) {
+    return configured.replace(/\/+$/, '');
+  }
+
+  return 'http://127.0.0.1:3000/v100';
+};
+
+export const getDefaultTenantId = (): string => {
+  return process.env.AUTH_DEFAULT_TENANT_ID?.trim() || 'lindafiestas';
+};
+
+export const appendSetCookieHeaders = (headers: Headers, targetHeaders: Headers): void => {
+  const anyHeaders = headers as unknown as { getSetCookie?: () => string[] };
+  const setCookies =
+    typeof anyHeaders.getSetCookie === 'function' ? anyHeaders.getSetCookie() : [];
+
+  setCookies.forEach((cookieValue) => {
+    targetHeaders.append('set-cookie', cookieValue);
+  });
+
+  if (setCookies.length > 0) {
+    return;
+  }
+
+  const mergedSetCookie = headers.get('set-cookie');
+  if (!mergedSetCookie) {
+    return;
+  }
+
+  targetHeaders.append('set-cookie', mergedSetCookie);
+};
+
+export const extractCookieValueFromSetCookie = (
+  headers: Headers,
+  cookieName: string
+): string | null => {
+  const anyHeaders = headers as unknown as { getSetCookie?: () => string[] };
+  const fromSetCookieMethod =
+    typeof anyHeaders.getSetCookie === 'function' ? anyHeaders.getSetCookie() : [];
+
+  const candidates = [...fromSetCookieMethod];
+  const merged = headers.get('set-cookie');
+  if (merged) {
+    candidates.push(merged);
+  }
+
+  for (const candidate of candidates) {
+    const pattern = new RegExp(`${cookieName}=([^;]+)`);
+    const match = candidate.match(pattern);
+    if (match?.[1]) {
+      return decodeURIComponent(match[1]);
+    }
+  }
+
+  return null;
 };

@@ -19,6 +19,10 @@ export const navSections = [
     ],
   },
   {
+    title: 'Catalogo',
+    items: [{ label: 'Categorias', href: '/dashboard/catalog/service-categories' }],
+  },
+  {
     title: 'Configuracion',
     items: [
       { label: 'Usuarios', href: '/dashboard/settings/users' },

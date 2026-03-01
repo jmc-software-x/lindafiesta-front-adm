@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useErrorStore } from '@/stores/error-store';
 import { useLoadingStore } from '@/stores/loading-store';
@@ -10,6 +10,19 @@ interface LoginApiResponse {
   ok: boolean;
   message?: string;
 }
+
+interface TenantOption {
+  id: string;
+  name: string;
+}
+
+interface PublicTenantsApiResponse {
+  ok: boolean;
+  message?: string;
+  tenants?: TenantOption[];
+}
+
+const DEFAULT_TENANT_ID = process.env.NEXT_PUBLIC_AUTH_DEFAULT_TENANT_ID || 'lindafiestas';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -24,7 +37,60 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [tenantId, setTenantId] = useState(DEFAULT_TENANT_ID);
+  const [tenants, setTenants] = useState<TenantOption[]>([]);
+  const [isTenantsLoading, setIsTenantsLoading] = useState(true);
+  const [tenantsError, setTenantsError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const hasTenantOptions = tenants.length > 0;
+
+  const selectedTenantName = useMemo(
+    () => tenants.find((tenant) => tenant.id === tenantId)?.name ?? null,
+    [tenantId, tenants]
+  );
+
+  const loadTenants = useCallback(async () => {
+    setIsTenantsLoading(true);
+    setTenantsError(null);
+
+    try {
+      const response = await fetch('/api/tenants/public', {
+        method: 'GET',
+        cache: 'no-store',
+      });
+
+      const result = (await response.json()) as PublicTenantsApiResponse;
+
+      if (!response.ok || !result.ok) {
+        const message = result.message ?? 'No se pudo cargar los tenants.';
+        setTenantsError(message);
+        setTenants([]);
+        return;
+      }
+
+      const normalizedTenants = (result.tenants ?? []).filter(
+        (tenant) => typeof tenant.id === 'string' && typeof tenant.name === 'string'
+      );
+      setTenants(normalizedTenants);
+
+      if (normalizedTenants.length > 0) {
+        setTenantId((currentTenantId) =>
+          normalizedTenants.some((tenant) => tenant.id === currentTenantId)
+            ? currentTenantId
+            : normalizedTenants[0].id
+        );
+      }
+    } catch {
+      setTenantsError('No se pudo conectar para obtener tenants.');
+      setTenants([]);
+    } finally {
+      setIsTenantsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadTenants();
+  }, [loadTenants]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -46,6 +112,7 @@ export default function LoginPage() {
         body: JSON.stringify({
           email,
           password,
+          tenantId,
         }),
       });
 
@@ -98,6 +165,61 @@ export default function LoginPage() {
           Accede al dashboard de ventas y operaciones.
         </p>
         <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="tenantId">
+              Tenant
+            </label>
+            {isTenantsLoading ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+                Cargando tenants...
+              </div>
+            ) : hasTenantOptions ? (
+              <>
+                <select
+                  id="tenantId"
+                  required
+                  value={tenantId}
+                  onChange={(event) => setTenantId(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none ring-brand-500 focus:ring-2"
+                  autoComplete="organization"
+                >
+                  {tenants.map((tenant) => (
+                    <option key={tenant.id} value={tenant.id}>
+                      {tenant.name} ({tenant.id})
+                    </option>
+                  ))}
+                </select>
+                {selectedTenantName ? (
+                  <p className="mt-1 text-xs text-slate-500">Tenant activo: {selectedTenantName}</p>
+                ) : null}
+              </>
+            ) : (
+              <input
+                id="tenantId"
+                type="text"
+                required
+                value={tenantId}
+                onChange={(event) => setTenantId(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:ring-2"
+                placeholder="tenant-id"
+                autoComplete="organization"
+              />
+            )}
+            {tenantsError ? (
+              <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                <p>{tenantsError}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void loadTenants();
+                  }}
+                  className="mt-2 rounded border border-amber-300 px-2 py-1 font-medium hover:bg-amber-100"
+                >
+                  Reintentar carga de tenants
+                </button>
+              </div>
+            ) : null}
+          </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="email">
               Correo
