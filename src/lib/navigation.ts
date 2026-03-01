@@ -8,6 +8,7 @@ export const navSections = [
     items: [
       { label: 'Leads', href: '/dashboard/sales/leads' },
       { label: 'Cotizaciones', href: '/dashboard/sales/quotes' },
+      { label: 'Tickets', href: '/dashboard/sales/quote-tickets' },
     ],
   },
   {

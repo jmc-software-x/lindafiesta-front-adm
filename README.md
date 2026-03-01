@@ -20,11 +20,17 @@ Dashboard administrativo para ventas, operaciones y seguridad.
 - Front carga tenants desde `GET /api/tenants/public` -> backend `GET /tenants/public`.
 - Si la carga de tenants falla, el formulario permite ingreso manual de `tenantId`.
 
+## Integracion quote tickets
+- `GET /api/quote-tickets` -> backend `GET /quote-tickets` (opcional `?status=...`).
+- `POST /api/quote-tickets` -> backend `POST /quote-tickets`.
+- `PATCH /api/quote-tickets/:id/status` -> backend `PATCH /quote-tickets/:id/status`.
+
 ## Mapa inicial de rutas
 - `/login`
 - `/dashboard`
 - `/dashboard/sales/leads`
 - `/dashboard/sales/quotes`
+- `/dashboard/sales/quote-tickets`
 - `/dashboard/operations/events`
 - `/dashboard/operations/calendar`
 - `/dashboard/providers`
