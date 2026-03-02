@@ -14,6 +14,7 @@ Dashboard administrativo para ventas, operaciones y seguridad.
 - `AUTH_DEFAULT_TENANT_ID`: tenant por defecto enviado al backend en login.
 - `NEXT_PUBLIC_AUTH_DEFAULT_TENANT_ID`: tenant por defecto visible en formulario login.
 - `BACKEND_API_BASE_URL`: base URL del backend con prefijo versionado (ej: `http://127.0.0.1:3000/v100`).
+- `NEXT_PUBLIC_MEDIA_PUBLIC_BASE_URL` (opcional): base pública para resolver `key` S3 a URL final en CMS pages (ej: `https://cdn.lindafiestas.com`).
 
 ## Integracion auth/tenancy
 - Login usa proxy local `POST /api/auth/login` -> backend `POST /auth/login`.
@@ -25,6 +26,12 @@ Dashboard administrativo para ventas, operaciones y seguridad.
 - `POST /api/quote-tickets` -> backend `POST /quote-tickets`.
 - `PATCH /api/quote-tickets/:id/status` -> backend `PATCH /quote-tickets/:id/status`.
 
+## Integracion pages CMS
+- `GET /api/admin/pages/:slug` -> backend `GET /admin/pages/:slug`.
+- `PUT /api/admin/pages/:slug/draft` -> backend `PUT /admin/pages/:slug/draft`.
+- `POST /api/admin/pages/:slug/publish` -> backend `POST /admin/pages/:slug/publish`.
+- Subida de imagen reutilizable (common): `POST /api/files/presign` + `PUT` directo a S3 (+ opcional `POST /api/files/presign-get` para preview).
+
 ## Mapa inicial de rutas
 - `/login`
 - `/dashboard`
@@ -35,6 +42,7 @@ Dashboard administrativo para ventas, operaciones y seguridad.
 - `/dashboard/operations/calendar`
 - `/dashboard/providers`
 - `/dashboard/catalog/service-categories`
+- `/dashboard/catalog/pages`
 - `/dashboard/settings/users`
 - `/dashboard/settings/roles`
 - `/dashboard/settings/audit`

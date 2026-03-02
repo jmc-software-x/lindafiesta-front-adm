@@ -1,6 +1,8 @@
 'use client';
 
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { extractErrorMessage } from '@/lib/common/api-response';
+import { uploadImageWithPresign } from '@/lib/files/image-upload-controller';
 import { useErrorStore } from '@/stores/error-store';
 import { useLoadingStore } from '@/stores/loading-store';
 import { useUiStore } from '@/stores/ui-store';
@@ -41,11 +43,6 @@ interface UpdateCategoryPayload {
   isActive?: boolean;
 }
 
-interface PresignPutResponse {
-  key: string;
-  url: string;
-}
-
 interface EditDraft {
   name: string;
   slug: string;
@@ -71,28 +68,6 @@ const INITIAL_CREATE_FORM: CreateCategoryPayload = {
 function normalizeOptionalText(value: string): string | undefined {
   const trimmed = value.trim();
   return trimmed ? trimmed : undefined;
-}
-
-function extractErrorMessage(payload: unknown, fallback: string): string {
-  if (!payload || typeof payload !== 'object') {
-    return fallback;
-  }
-
-  const record = payload as Record<string, unknown>;
-  const message = record.message;
-
-  if (typeof message === 'string' && message.trim()) {
-    return message;
-  }
-
-  if (Array.isArray(message)) {
-    const joined = message.filter((item) => typeof item === 'string').join(' | ');
-    if (joined) {
-      return joined;
-    }
-  }
-
-  return fallback;
 }
 
 export default function ServiceCategoriesPage() {
@@ -372,55 +347,20 @@ export default function ServiceCategoriesPage() {
     }
 
     const file = draft.file;
-    if (!file.type.startsWith('image/')) {
-      pushNotification({
-        type: 'error',
-        title: 'Archivo invalido',
-        message: 'Solo se permiten imagenes.',
-      });
-      return;
-    }
 
     setUploadingCategoryId(categoryId);
     startLoading(`service-categories.upload.${categoryId}`);
 
     try {
-      const presignResponse = await fetch('/api/files/presign', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contentType: file.type,
-          folder: 'service-categories',
-        }),
+      const uploadedImage = await uploadImageWithPresign({
+        file,
+        folder: 'service-categories',
+        sourceMode: 'key',
+        resolvePreviewUrl: false,
       });
-
-      const presignBody = (await presignResponse.json()) as unknown;
-
-      if (!presignResponse.ok) {
-        throw new Error(extractErrorMessage(presignBody, 'No se pudo crear URL de subida.'));
-      }
-
-      const presign = presignBody as PresignPutResponse;
-      if (!presign?.key || !presign?.url) {
-        throw new Error('Respuesta invalida de presign.');
-      }
-
-      const s3UploadResponse = await fetch(presign.url, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': file.type,
-        },
-        body: file,
-      });
-
-      if (!s3UploadResponse.ok) {
-        throw new Error('No se pudo subir imagen a S3.');
-      }
 
       const registerPayload: Record<string, unknown> = {
-        s3Key: presign.key,
+        s3Key: uploadedImage.key,
         contentType: file.type,
         sizeBytes: file.size,
       };

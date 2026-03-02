@@ -21,7 +21,12 @@ export const navSections = [
   },
   {
     title: 'Catalogo',
-    items: [{ label: 'Categorias', href: '/dashboard/catalog/service-categories' }],
+    items: [
+      { label: 'Categorias', href: '/dashboard/catalog/service-categories' },
+      { label: 'Pages CMS', href: '/dashboard/catalog/pages' },
+      { label: 'Blob Storage', href: '/dashboard/catalog/storage' },
+      { label: 'Documentos legales', href: '/dashboard/catalog/documents' },
+    ],
   },
   {
     title: 'Configuracion',
