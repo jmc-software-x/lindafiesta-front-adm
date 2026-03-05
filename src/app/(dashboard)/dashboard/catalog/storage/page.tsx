@@ -9,6 +9,7 @@ import {
   useState,
 } from 'react';
 import {
+  normalizeStorageLookupKey,
   resolveObjectViewUrl,
   SourceMode,
   uploadObjectWithPresign,
@@ -271,16 +272,17 @@ export default function BlobStorageCatalogPage() {
     startLoading('blob-storage.resolve');
 
     try {
+      const normalizedKey = normalizeStorageLookupKey(source);
       const url = await resolveObjectViewUrl({
         source,
         signedGetTtlSeconds: normalizeTtl(lookupTtl),
       });
 
-      setLookupKey(source);
+      setLookupKey(normalizedKey ?? source);
       setLookupUrl(url);
       setPreviewUrl(url);
       setPreviewContentType(contentTypeHint ?? '');
-      setPreviewLabel(source);
+      setPreviewLabel(normalizedKey ?? source);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'No se pudo generar URL firmada.';
       reportError({
@@ -442,13 +444,18 @@ export default function BlobStorageCatalogPage() {
         <h3 className="text-base font-semibold text-slate-900">Buscar y ver por key</h3>
         <div className="mt-4 grid gap-3 md:grid-cols-[1fr_180px_auto]">
           <label className="space-y-1">
-            <span className="block text-xs font-medium uppercase tracking-wide text-slate-500">s3Key</span>
+            <span className="block text-xs font-medium uppercase tracking-wide text-slate-500">
+              Source (key / s3 uri / arn / url s3)
+            </span>
             <input
               value={lookupKey}
               onChange={(event) => setLookupKey(event.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-brand-500 focus:ring-2"
-              placeholder="service-categories/2026/03/archivo.png"
+              placeholder="service-categories/file.jpg o s3://bucket/key o arn:aws:s3:::bucket/key"
             />
+            <p className="text-[11px] text-slate-500">
+              Puedes pegar la URL de S3 (https://bucket.s3.region.amazonaws.com/key) y se normaliza automaticamente.
+            </p>
           </label>
           <label className="space-y-1">
             <span className="block text-xs font-medium uppercase tracking-wide text-slate-500">TTL</span>

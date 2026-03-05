@@ -86,6 +86,93 @@ function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value);
 }
 
+function decodeUriComponentSafe(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function extractS3KeyFromS3Uri(source: string): string | null {
+  const match = source.match(/^s3:\/\/[^/]+\/(.+)$/i);
+  if (!match?.[1]) {
+    return null;
+  }
+
+  return decodeUriComponentSafe(match[1].replace(/^\/+/, ''));
+}
+
+function extractS3KeyFromArn(source: string): string | null {
+  const match = source.match(/^arn:aws:s3:::[^/]+\/(.+)$/i);
+  if (!match?.[1]) {
+    return null;
+  }
+
+  return decodeUriComponentSafe(match[1].replace(/^\/+/, ''));
+}
+
+function extractS3KeyFromHttpUrl(source: string): string | null {
+  let parsedUrl: URL;
+
+  try {
+    parsedUrl = new URL(source);
+  } catch {
+    return null;
+  }
+
+  const host = parsedUrl.hostname.toLowerCase();
+  const path = parsedUrl.pathname.replace(/^\/+/, '');
+
+  if (!path) {
+    return null;
+  }
+
+  const virtualHostedStyleMatch = host.match(/^(.+)\.s3[.-][a-z0-9-]+\.amazonaws\.com$/i);
+  const virtualHostedStyleDefaultMatch = host.match(/^(.+)\.s3\.amazonaws\.com$/i);
+
+  if (virtualHostedStyleMatch || virtualHostedStyleDefaultMatch) {
+    return decodeUriComponentSafe(path);
+  }
+
+  const pathStyleMatch = host.match(/^s3[.-][a-z0-9-]+\.amazonaws\.com$/i);
+  const pathStyleDefaultMatch = host === 's3.amazonaws.com';
+
+  if (pathStyleMatch || pathStyleDefaultMatch) {
+    const segments = path.split('/').filter(Boolean);
+    if (segments.length < 2) {
+      return null;
+    }
+
+    return decodeUriComponentSafe(segments.slice(1).join('/'));
+  }
+
+  return null;
+}
+
+export function normalizeStorageLookupKey(source: string): string | null {
+  const trimmed = source.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const fromS3Uri = extractS3KeyFromS3Uri(trimmed);
+  if (fromS3Uri) {
+    return fromS3Uri;
+  }
+
+  const fromArn = extractS3KeyFromArn(trimmed);
+  if (fromArn) {
+    return fromArn;
+  }
+
+  if (isHttpUrl(trimmed)) {
+    return extractS3KeyFromHttpUrl(trimmed);
+  }
+
+  return trimmed;
+}
+
 export interface ResolveImageViewUrlInput {
   source: string;
   signedGetTtlSeconds?: number;
@@ -102,11 +189,16 @@ export async function resolveObjectViewUrl(input: ResolveObjectViewUrlInput): Pr
     throw new Error('No se encontro source para resolver el archivo.');
   }
 
+  const normalizedKey = normalizeStorageLookupKey(source);
+  if (normalizedKey) {
+    return createSignedGetUrl(normalizedKey, input.signedGetTtlSeconds);
+  }
+
   if (isHttpUrl(source)) {
     return source;
   }
 
-  return createSignedGetUrl(source, input.signedGetTtlSeconds);
+  throw new Error('No se pudo resolver el source. Usa key, s3://, arn:aws:s3::: o URL de S3.');
 }
 
 export async function resolveImageViewUrl(input: ResolveImageViewUrlInput): Promise<string> {
